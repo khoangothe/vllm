@@ -86,6 +86,53 @@ class BenchmarkMetrics:
     percentiles_e2el_ms: List[Tuple[float, float]]
 
 
+def sample_tulu_requests(
+    dataset_path: str,
+    num_requests: int,
+    tokenizer: PreTrainedTokenizerBase,
+    fixed_output_len: Optional[int] = None,
+) -> List[Tuple[str, int, int]]:
+    if fixed_output_len is not None and fixed_output_len < 4:
+        raise ValueError("output_len too small")
+    # Load the dataset.
+    # Read the JSONL file
+    dataset = []
+    with open(dataset_path, 'r', encoding='utf-8') as file:
+        for line in file:
+            dataset.append(json.loads(line))
+
+    # Filter out the conversations with less than 2 turns.
+    dataset = [data for data in dataset if len(data["messages"]) >= 2]
+    # Only keep the first two turns of each conversation.
+    dataset = [(data["messages"][0]["content"], data["messages"][1]["content"]) for data in dataset]
+
+    # Shuffle the dataset.
+    random.shuffle(dataset)
+
+    # Filter out sequences that are too long or too short
+    filtered_dataset: List[Tuple[str, int, int]] = []
+    for i in range(len(dataset)):
+        if len(filtered_dataset) == num_requests:
+            break
+
+        # Tokenize the prompts and completions.
+        prompt = dataset[i][0]
+        prompt_token_ids = tokenizer(prompt).input_ids
+        completion = dataset[i][1]
+        completion_token_ids = tokenizer(completion).input_ids
+        prompt_len = len(prompt_token_ids)
+        output_len = len(completion_token_ids
+                         ) if fixed_output_len is None else fixed_output_len
+        if prompt_len < 4 or output_len < 4:
+            # Prune too short sequences.
+            continue
+        if prompt_len > 1024 or prompt_len + output_len > 2048:
+            # Prune too long sequences.
+            continue
+        filtered_dataset.append((prompt, prompt_len, output_len))
+
+    return filtered_dataset
+
 def sample_sharegpt_requests(
     dataset_path: str,
     num_requests: int,
@@ -807,6 +854,15 @@ def main(args: argparse.Namespace):
             fixed_output_len=args.sharegpt_output_len,
         )
 
+    elif args.dataset_name == "tulu":
+        input_requests = sample_tulu_requests(
+            dataset_path=args.dataset_path,
+            num_requests=args.num_prompts,
+            tokenizer=tokenizer,
+            fixed_output_len=args.sharegpt_output_len,
+        )
+
+
     elif args.dataset_name == "sharegpt":
         input_requests = sample_sharegpt_requests(
             dataset_path=args.dataset_path,
@@ -974,7 +1030,7 @@ if __name__ == "__main__":
         "--dataset-name",
         type=str,
         default="sharegpt",
-        choices=["sharegpt", "sonnet", "random", "hf"],
+        choices=["sharegpt", "sonnet", "random", "tulu", "hf"],
         help="Name of the dataset to benchmark on.",
     )
     parser.add_argument("--dataset-path",

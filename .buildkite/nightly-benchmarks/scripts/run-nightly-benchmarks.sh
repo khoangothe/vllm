@@ -240,6 +240,24 @@ run_serving_tests() {
           --ignore-eos \
           $client_args"
 
+      elif [[ "$dataset_name" = "tulu" ]]; then
+
+        client_command="python3 benchmark_serving.py \
+          --backend $backend \
+          --tokenizer /tokenizer_cache \
+          --model $model \
+          --dataset-name $dataset_name \
+          --dataset-path $dataset_path \
+          --num-prompts $num_prompts \
+          --port $port \
+          --save-result \
+          --result-dir $RESULTS_FOLDER \
+          --result-filename ${new_test_name}.json \
+          --request-rate $qps \
+          --ignore-eos \
+          $client_args"
+
+
       elif [[ "$dataset_name" = "sonnet" ]]; then
 
         sonnet_input_len=$(echo "$common_params" | jq -r '.sonnet_input_len')
@@ -266,7 +284,7 @@ run_serving_tests() {
 
       else
   
-        echo "The dataset name must be either 'sharegpt' or 'sonnet'. Got $dataset_name."
+        echo "The dataset name must be either 'sharegpt' or 'tulu' or 'sonnet'. Got $dataset_name."
         exit 1
 
       fi
@@ -305,6 +323,9 @@ run_serving_tests() {
 prepare_dataset() {
 
   # download sharegpt dataset
+  cd "$VLLM_SOURCE_CODE_LOC/benchmarks"
+  wget https://huggingface.co/datasets/khoantap/tulu-1000-seed-42/resolve/main/tulu.json
+
   cd "$VLLM_SOURCE_CODE_LOC/benchmarks"
   wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
 
